@@ -93,3 +93,19 @@ class PatternCommand(RemoteGefUnitTestGeneric):
         gdb.execute("run")
         res = gdb.execute(cmd, to_string=True)
         self.assertIn("not found", res)
+
+    @pytest.mark.skipif(not is_64b(), reason="Requires a 64-bit (8-byte) pattern")
+    def test_cmd_pattern_offset_length_sync(self):
+        """Regression: `pattern create N` must keep `pattern search`/`offset` in
+        sync, so an offset beyond the default pattern.length (1024) is not
+        truncated out of the regenerated pattern. This used to report a spurious
+        big-endian match at a lower offset instead of the real little-endian one.
+        """
+        gdb = self._gdb
+        gdb.execute("start")
+        gdb.execute("pattern create 1200")
+        # 0x6661616161616165 is stored little-endian as b"eaaaaaaf", at offset
+        # 1032 of the 1200-byte pattern (period = 8). Before the fix, search
+        # regenerated only 1024 bytes and wrongly reported "840 (big-endian)".
+        res = gdb.execute("pattern offset 0x6661616161616165", to_string=True)
+        self.assertIn("Found at offset 1032 (little-endian search) likely", res)
