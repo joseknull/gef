@@ -10549,11 +10549,6 @@ class PatternCreateCommand(GenericCommand):
     )
     def do_invoke(self, _: list[str], **kwargs: Any) -> None:
         args: argparse.Namespace = kwargs["arguments"]
-        # Persist an explicitly requested length so a later `pattern search`/
-        # `pattern offset` regenerates a pattern of the SAME size. Otherwise
-        # offsets beyond the default gef.config["pattern.length"] are truncated
-        # out of the regenerated pattern and the search silently reports a
-        # spurious (often opposite-endianness) match. See PatternSearchCommand.
         if args.length:
             gef.config["pattern.length"] = args.length
         length = args.length or gef.config["pattern.length"]
@@ -10618,11 +10613,6 @@ class PatternSearchCommand(GenericCommand):
             f"Searching for '{pattern_le.hex()}'/'{pattern_be.hex()}' with period={period}"
         )
         cyclic_pattern = generate_cyclic_pattern(size, period)
-        # Search the representation that matches the TARGET endianness first and
-        # prefer it: that offset is the one corresponding to how the value is
-        # actually stored in memory. Only fall back to the opposite endianness
-        # if the target-endianness match is not present. (The order used to be
-        # hardcoded little-endian-first, which is wrong on big-endian targets.)
         if gef.arch.endianness == Endianness.LITTLE_ENDIAN:
             candidates = ((pattern_le, "little-endian"), (pattern_be, "big-endian"))
         else:
@@ -10631,7 +10621,6 @@ class PatternSearchCommand(GenericCommand):
         for idx, (needle, label) in enumerate(candidates):
             off = cyclic_pattern.find(needle)
             if off >= 0:
-                # idx == 0 is the target-endianness match -> the likely one
                 tag = Color.colorify("likely", "bold green") if idx == 0 else ""
                 ok(f"Found at offset {off:d} ({label} search) {tag}")
                 return
